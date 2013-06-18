@@ -64,3 +64,129 @@ function tapi_get_list_timeline( $list, $owner = false, $count = 20 ) {
 		$list = "slug=$list&owner_screen_name=$owner";
 	return WP_Twitter_API()->get_list_timeline( "count={$count}&{$list}" );
 }
+
+/**
+ * Parse the tweet hashtags
+ *
+ * @param array $hashtags Required. Array of hashtag entity objects in a tweet
+ * @return array $parsed_entities. Array of parsed hashtag entity objects in tweet
+ */
+function tapi_parse_hashtag( $hashtags ) {
+	$parsed_entities = array();
+	$hashtag_link_pattern = '<a href="http://twitter.com/search?q=%%23%s&src=hash" rel="nofollow" target="_blank">#%s</a>';
+	foreach( $hashtags as $hashtag ) {
+		$entity = new stdclass();
+		$entity->start = $hashtag->indices[0];
+		$entity->length = $hashtag->indices[1] - $hashtag->indices[0];
+		$entity->replace = sprintf( $hashtag_link_pattern, strtolower( $hashtag->text ), $hashtag->text );
+		// use the start index as the array key for sorting purposes
+		$parsed_entities[$entity->start] = $entity;
+	}
+	return $parsed_entities;
+}
+
+/**
+ * Parse the tweet url links
+ *
+ * @param array $urls Required. Array of url entity objects in a tweet
+ * @return array $parsed_entities. Array of parsed url entity objects in tweet
+ */
+function tapi_parse_url_link( $urls ) {
+	$parsed_entities = array();
+	$url_link_pattern = '<a href="%s" rel="nofollow" target="_blank" title="%s">%s</a>';
+	foreach( $urls as $url ) {
+		$entity = new stdclass();
+		$entity->start = $url->indices[0];
+		$entity->length = $url->indices[1] - $url->indices[0];
+		$entity->replace = sprintf( $url_link_pattern, $url->url, $url->expanded_url, $url->display_url );
+		// use the start index as the array key for sorting purposes
+		$parsed_entities[$entity->start] = $entity;
+	}
+	return $parsed_entities;
+}
+
+/**
+ * Parse the tweet user mentions
+ *
+ * @param array $user_mentions Required. Array of user mention entity objects in a tweet
+ * @return array $parsed_entities. Array of parsed user mention entity objects in tweet
+ */
+function tapi_parse_user_mention( $user_mentions ) {
+	$parsed_entities = array();
+	$user_mention_link_pattern = '<a href="http://twitter.com/%s" rel="nofollow" target="_blank" title="%s">@%s</a>';
+	foreach( $user_mentions as $user_mention ) {
+		$entity = new stdclass();
+		$entity->start = $user_mention->indices[0];
+		$entity->length = $user_mention->indices[1] - $user_mention->indices[0];
+		$entity->replace = sprintf($user_mention_link_pattern, strtolower($user_mention->screen_name), $user_mention->name, $user_mention->screen_name);
+		// use the start index as the array key for sorting purposes
+		$parsed_entities[$entity->start] = $entity;
+	}
+	return $parsed_entities;
+}
+
+/**
+ * Parse the tweet media links
+ *
+ * @param array $media Required. Array of media entity objects in a tweet
+ * @return array $parsed_entities. Array of parsed media entity objects in tweet
+ */
+function tapi_parse_media_link( $media ) {
+	$parsed_entities = array();
+	$media_link_pattern = '<a href="%s" rel="nofollow" target="_blank" title="%s">%s</a>';
+	foreach( $media as $mediaitem ) {
+		$entity = new stdclass();
+		$entity->start = $mediaitem->indices[0];
+		$entity->length = $mediaitem->indices[1] - $mediaitem->indices[0];
+		$entity->replace = sprintf( $media_link_pattern, $mediaitem->url, $mediaitem->expanded_url, $mediaitem->display_url );
+		// use the start index as the array key for sorting purposes
+		$parsed_entities[$entity->start] = $entity;
+	}
+	return $parsed_entities;
+}
+
+/**
+ * Filter the Twitter api response to replace hashtags, urls, user mentions, and media links with
+ *
+ * @param array $media Required. Array of media entity objects in a tweet
+ * @return array $parsed_entities. Array of parsed media entity objects in tweet
+ */
+function tapi_filter_tweet_text( $response ) {
+jta_pr($response);
+
+	// process each tweet in the response
+	foreach( $response as $k => $tweet ) {
+		// initialize an empty array to hold the parsed entities
+		$entities = array();
+
+		if ( !empty( $tweet->entities->hashtags ) ) // parse the hashtags
+			$entities = $entities + tapi_parse_hashtag( $tweet->entities->hashtags );
+
+		if ( !empty( $tweet->entities->urls ) ) // parse the urls
+			$entities = $entities + tapi_parse_url_link( $tweet->entities->urls );
+
+		if ( !empty( $tweet->entities->user_mentions ) ) // parse the user mentions
+			$entities = $entities + tapi_parse_user_mention( $tweet->entities->user_mentions );
+
+		if ( !empty( $tweet->entities->media ) ) // parse the media links
+			$entities = $entities + tapi_parse_media_link( $tweet->entities->media );
+
+		// because we're using the location index of the substring to begin the replacement, we must reverse the order and work backwards.
+		krsort( $entities );
+		jta_pr($entities);
+
+		// replace the entities in the tweet text with the parsed versions
+			echo '<pre>' .utf8_encode($tweet->text) . '</pre>';
+		foreach ( $entities as $entity ) {
+			echo jta_pr($entity);
+			$tweet->text = substr_replace( $tweet->text, $entity->replace, $entity->start, $entity->length );
+			echo '<pre>' .$tweet->text . '</pre>';
+		}
+
+		// put the tweet back in the response array
+		$response[ $k ] = $tweet;
+	}
+	// send the processed response back
+	return $response;
+}
+add_filter( 'twitter_get_callback', 'tapi_filter_tweet_text' );
