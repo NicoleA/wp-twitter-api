@@ -138,11 +138,12 @@ class WP_Twitter_API {
 	public function get( $url, $params = array(), $defaults = array() ) {
 		$params = wp_parse_args( $params, $defaults );
 		$cache_key = 'tafwp_' . md5( $url . serialize( $params ) );
-		if ( false === ( $response = get_transient( $cache_key ) ) ) {
+		//if ( false === ( $response = get_transient( $cache_key ) ) ) {
 			$this->connect();
 			$response = $this->api->get( $url, $params );
+			$response = apply_filters( 'twitter_get_callback', $response );
 			set_transient( $cache_key, $response, $this->cache_length );
-		}
+		//}
 		return $response;
 	}
 
