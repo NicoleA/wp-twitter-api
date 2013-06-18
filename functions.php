@@ -66,6 +66,24 @@ function tapi_get_list_timeline( $list, $owner = false, $count = 20 ) {
 }
 
 /**
+ * Twitter timestamp format
+ */
+function tapi_twitter_time( $date ) {
+	$time = strtotime( $date );
+	$secs = time() - $time;
+	if ( (float)$secs < 60.0 ) {
+		return round($secs) . 's';
+	}
+	if ( (float)$secs / 60.0 < 60.0 ) {
+		return round($secs / 60) . 'm';
+	}
+	if ( (float)$secs / 3600.0 < 24.0 ) {
+		return round($secs / 3600 ) . 'h';
+	}
+	return date( 'j M', $time );
+}
+
+/**
  * Parse the tweet hashtags
  *
  * @param array $hashtags Required. Array of hashtag entity objects in a tweet
